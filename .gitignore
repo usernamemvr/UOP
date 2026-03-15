@@ -1,0 +1,9 @@
+/order-service/src/test/java/com/spring/orderservice/OrderServiceApplicationTests.java
+/payment-service/src/test/java/com/spring/paymentservice/PaymentServiceApplicationTests.java
+/user-service/src/test/java/com/spring/userservice/UserServiceApplicationTests.java
+/.idea/.gitignore
+/.idea/misc.xml
+/.idea/modules.xml
+/UOP.code-workspace
+/.idea/UOP.iml
+/.idea/vcs.xml

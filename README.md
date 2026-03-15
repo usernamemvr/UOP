@@ -1,14 +1,16 @@
 # Microservices Learning Project
 
-A Spring Boot microservices learning project demonstrating a basic microservice architecture with three independent services communicating via REST APIs.
+A Spring Boot microservices learning project demonstrating a microservice architecture with service discovery, featuring three independent services communicating via REST APIs with Spring Cloud Eureka.
 
 ## 1. Project Overview
 
-This project demonstrates a basic microservice architecture built using Spring Boot. The system consists of three independent microservices that communicate synchronously using REST APIs. This architecture serves as a foundation for learning microservices concepts and will later evolve using Spring Cloud technologies.
+This project demonstrates a microservice architecture built using Spring Boot and Spring Cloud. The system consists of three independent microservices that communicate synchronously using REST APIs with **Spring Cloud Eureka** for service discovery. This architecture serves as a foundation for learning microservices concepts and will continue to evolve with additional Spring Cloud technologies.
 
 The project showcases:
 - Service decomposition and separation of concerns
-- Inter-service communication via HTTP REST APIs
+- **Service discovery and registration with Spring Cloud Eureka**
+- **Load-balanced inter-service communication**
+- Inter-service communication via HTTP REST APIs using service names
 - Orchestration patterns in microservices
 - Service isolation with independent databases
 
@@ -39,10 +41,12 @@ Client → Order Service → Payment Service
 │  │  • Processes payment via payment-    │   │
 │  │    service                           │   │
 │  │  • Manages order lifecycle          │   │
+│  │  • Uses Eureka for service discovery│   │
 │  └──────────────────────────────────────┘   │
 └──────┬──────────────────┬───────────────────┘
        │                  │
        │ HTTP REST        │ HTTP REST
+       │ (via Eureka)     │ (via Eureka)
        │                  │
 ┌──────▼──────┐    ┌──────▼──────────┐
 │ User Service│    │ Payment Service │
@@ -51,7 +55,19 @@ Client → Order Service → Payment Service
 │ • User      │    │   Processing    │
 │   Management│    │ • Payment       │
 │             │    │   Status        │
-└─────────────┘    └─────────────────┘
+└──────┬──────┘    └──────┬──────────┘
+       │                  │
+       │                  │
+       │   Register &     │
+       │   Discover       │
+       │                  │
+       └──────────┬───────┘
+                  │
+         ┌────────▼─────────┐
+         │  Eureka Server   │
+         │  (Discovery)     │
+         │  Port: 8761      │
+         └──────────────────┘
 ```
 
 ### Service Responsibilities
@@ -118,30 +134,63 @@ The order service orchestrates the order creation workflow by:
 
 **Default Port:** `8082` (default Spring Boot port)
 
-## 4. Communication Model
+## 4. Service Discovery
 
-Services currently communicate via **synchronous HTTP REST calls** using Spring Boot's `RestTemplate`. The order-service uses REST clients (`UserClient` and `PaymentClient`) to make HTTP requests to other services.
+The project uses **Spring Cloud Eureka** for service discovery. All microservices register themselves with the Eureka server, allowing services to discover and communicate with each other using service names instead of hardcoded URLs.
+
+### Eureka Server (Discovery Server)
+
+The Eureka server acts as a service registry where all microservices register themselves and discover other services.
+
+- **Port**: `8761`
+- **Dashboard**: `http://localhost:8761` - View all registered services
+- **Service Registry**: All services register with Eureka and can discover each other by service name
+
+### Service Registration
+
+All services are configured with:
+- `@EnableDiscoveryClient` annotation
+- Eureka client configuration pointing to `http://localhost:8761/eureka/`
+- Service names defined in `application.yml`:
+  - `user-service` (port 8080)
+  - `payment-service` (port 8081)
+  - `order-service` (port 8082)
+
+### Load Balancing
+
+The `RestTemplate` in order-service is configured with `@LoadBalanced`, enabling:
+- Service name resolution through Eureka
+- Client-side load balancing across multiple service instances
+- Dynamic service discovery without hardcoded URLs
+
+## 5. Communication Model
+
+Services communicate via **synchronous HTTP REST calls** using Spring Boot's `RestTemplate` with **Eureka service discovery**. The order-service uses REST clients (`UserClient` and `PaymentClient`) that resolve service names through Eureka.
 
 ### Request Flow for Creating an Order
 
 1. **Client** sends `POST /orders` request to **order-service**
-2. **order-service** validates user by calling `GET /users/{id}` on **user-service**
+2. **order-service** validates user by calling `GET /users/{id}` on **user-service** (resolved via Eureka)
 3. **order-service** creates a temporary order with `PENDING` status
-4. **order-service** processes payment by calling `POST /payments` on **payment-service**
+4. **order-service** processes payment by calling `POST /payments` on **payment-service** (resolved via Eureka)
 5. **order-service** updates the order with payment information and final status
 6. **order-service** returns the complete order response to the client
 
 ### Communication Pattern
 
 - **Synchronous**: All inter-service communication is synchronous (request-response)
-- **Direct HTTP**: Services communicate directly via HTTP without service discovery
+- **Service Discovery**: Services communicate using service names resolved through Eureka
+- **Load Balanced**: `@LoadBalanced` RestTemplate enables client-side load balancing
 - **RESTful**: All services expose RESTful APIs following standard HTTP methods
 - **Client Pattern**: Order-service uses dedicated client classes (`UserClient`, `PaymentClient`) to encapsulate service-to-service communication
+- **Service Names**: Inter-service calls use service names (e.g., `http://user-service/users`, `http://payment-service/payments`) instead of hardcoded URLs
 
-## 5. Technology Stack
+## 6. Technology Stack
 
 - **Java 17** - Programming language
 - **Spring Boot 3.3.2 / 4.0.3** - Application framework
+- **Spring Cloud Eureka** - Service discovery and registration
+- **Spring Cloud LoadBalancer** - Client-side load balancing
 - **Spring Data JPA** - Data persistence layer
 - **H2 Database** - In-memory database for development
 - **Lombok** - Reduces boilerplate code
@@ -150,9 +199,9 @@ Services currently communicate via **synchronous HTTP REST calls** using Spring 
 - **Spring Web** - Web framework for REST endpoints
 - **Spring Actuator** - Production-ready features for monitoring
 
-## 6. Running the Project
+## 7. Running the Project
 
-Each service is an independent Spring Boot application and must be run separately.
+Each service is an independent Spring Boot application and must be run separately. **The Eureka discovery server must be started first** before starting the microservices.
 
 ### Prerequisites
 
@@ -161,34 +210,100 @@ Each service is an independent Spring Boot application and must be run separatel
 
 ### Running Services
 
-Navigate to each service directory and run:
+**Important:** Start the Eureka server first, then start the microservices in any order.
 
 ```bash
-# Terminal 1 - User Service
+# Terminal 1 - Eureka Discovery Server (START THIS FIRST)
+cd discovery-server
+./gradlew bootRun
+
+# Terminal 2 - User Service
 cd user-service
 ./gradlew bootRun
 
-# Terminal 2 - Payment Service
+# Terminal 3 - Payment Service
 cd payment-service
 ./gradlew bootRun
 
-# Terminal 3 - Order Service
+# Terminal 4 - Order Service
 cd order-service
 ./gradlew bootRun
 ```
 
 ### Service Ports
 
+- **discovery-server (Eureka)**: `8761` - Service registry and dashboard
 - **user-service**: `8080`
 - **payment-service**: `8081`
-- **order-service**: `8082` (default Spring Boot port)
+- **order-service**: `8082`
 
-**Note:** Ensure all services are running before making requests to the order-service, as it depends on both user-service and payment-service.
+### Verifying Service Registration
 
-## 7. API Testing
+1. Start the Eureka server and wait for it to be ready
+2. Start all microservices
+3. Visit `http://localhost:8761` to view the Eureka dashboard
+4. You should see all three services registered:
+   - `USER-SERVICE`
+   - `PAYMENT-SERVICE`
+   - `ORDER-SERVICE`
 
-### Creating a User
+**Note:** 
+- Ensure the Eureka server is running before starting microservices
+- All services must be running before making requests to the order-service, as it depends on both user-service and payment-service
+- Services will automatically register with Eureka on startup
 
+## 8. API Testing
+
+### Order Service Endpoints (Port: 8082)
+
+#### Create Order
+```bash
+curl -X POST http://localhost:8082/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 1,
+    "amount": 100.50,
+    "currency": "USD"
+  }'
+```
+
+#### Get Order by ID
+```bash
+curl -X GET http://localhost:8082/orders/1
+```
+
+#### Get All Orders
+```bash
+curl -X GET http://localhost:8082/orders
+```
+
+### Payment Service Endpoints (Port: 8081)
+
+#### Create Payment
+```bash
+curl -X POST http://localhost:8081/payments \
+  -H "Content-Type: application/json" \
+  -d '{
+    "orderId": 1,
+    "userId": 1,
+    "amount": 100.50,
+    "currency": "USD"
+  }'
+```
+
+#### Get Payment by ID
+```bash
+curl -X GET http://localhost:8081/payments/1
+```
+
+#### Get Payments by Order ID
+```bash
+curl -X GET http://localhost:8081/payments/order/1
+```
+
+### User Service Endpoints (Port: 8080)
+
+#### Create User
 ```bash
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
@@ -199,73 +314,65 @@ curl -X POST http://localhost:8080/users \
   }'
 ```
 
-### Creating a Payment
-
+#### Get All Users
 ```bash
-curl -X POST http://localhost:8081/payments \
+curl -X GET http://localhost:8080/users
+```
+
+#### Get User by ID
+```bash
+curl -X GET http://localhost:8080/users/1
+```
+
+### Example Complete Flow
+
+1. **Create a user first:**
+```bash
+curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
   -d '{
-    "orderId": 1,
-    "userId": 1,
-    "amount": 99.99,
-    "currency": "USD"
+    "name": "John Doe",
+    "role": "Customer",
+    "location": "New York"
   }'
 ```
 
-### Creating an Order
-
+2. **Create an order (automatically validates user and processes payment via service discovery):**
 ```bash
 curl -X POST http://localhost:8082/orders \
   -H "Content-Type: application/json" \
   -d '{
     "userId": 1,
-    "amount": 99.99,
+    "amount": 250.75,
     "currency": "USD"
   }'
 ```
 
-**Note:** When creating an order, ensure the `userId` exists in the user-service. The order-service will automatically validate the user and process the payment.
-
-### Additional Examples
-
-**Get all users:**
+3. **Get the created order:**
 ```bash
-curl http://localhost:8080/users
+curl -X GET http://localhost:8082/orders/1
 ```
 
-**Get user by ID:**
+4. **Get payments for that order:**
 ```bash
-curl http://localhost:8080/users/1
+curl -X GET http://localhost:8081/payments/order/1
 ```
 
-**Get payment by ID:**
-```bash
-curl http://localhost:8081/payments/1
-```
+**Note:** When creating an order, ensure the `userId` exists in the user-service. The order-service will automatically:
+- Discover and call user-service via Eureka to validate the user
+- Discover and call payment-service via Eureka to process the payment
+- All inter-service communication uses service names resolved through Eureka
 
-**Get payments by order ID:**
-```bash
-curl http://localhost:8081/payments/order/1
-```
-
-**Get order by ID:**
-```bash
-curl http://localhost:8082/orders/1
-```
-
-**Get all orders:**
-```bash
-curl http://localhost:8082/orders
-```
-
-## 8. What This Project Demonstrates
+## 9. What This Project Demonstrates
 
 This project serves as a learning resource for understanding key microservices concepts:
 
 ### Key Concepts
 
 - **Microservice Decomposition**: Breaking down a monolithic application into smaller, focused services
-- **Service-to-Service Communication**: Implementing HTTP-based communication between services
+- **Service Discovery**: Using Eureka for dynamic service registration and discovery
+- **Service-to-Service Communication**: Implementing HTTP-based communication between services using service names
+- **Load Balancing**: Client-side load balancing with Spring Cloud LoadBalancer
 - **Orchestration Pattern**: Using a central service (order-service) to coordinate workflow across multiple services
 - **REST API Contracts**: Defining and implementing RESTful APIs for service interaction
 - **Service Isolation**: Each service maintains its own database and can be developed/deployed independently
@@ -275,18 +382,19 @@ This project serves as a learning resource for understanding key microservices c
 ### Learning Outcomes
 
 - Understanding how to structure microservices
-- Implementing synchronous service communication
+- Implementing service discovery with Spring Cloud Eureka
+- Configuring load-balanced REST clients for service communication
+- Implementing synchronous service communication with service discovery
 - Managing service dependencies and orchestration
-- Working with Spring Boot REST clients
+- Working with Spring Boot REST clients and service name resolution
 - Applying separation of concerns in distributed systems
 
-## 9. Future Improvements
+## 10. Future Improvements
 
 This project is designed to evolve with additional Spring Cloud technologies and patterns:
 
 ### Planned Enhancements
 
-- **Service Discovery (Spring Cloud Eureka)**: Implement service registry to eliminate hardcoded URLs
 - **Feign Clients**: Replace RestTemplate with declarative Feign clients for cleaner service communication
 - **API Gateway (Spring Cloud Gateway)**: Add a single entry point for all client requests
 - **Resilience Patterns (Resilience4j)**: Implement circuit breakers, retries, and rate limiting
@@ -294,23 +402,34 @@ This project is designed to evolve with additional Spring Cloud technologies and
 - **Saga Pattern**: Implement distributed transaction management for complex workflows
 - **Configuration Management**: Use Spring Cloud Config Server for centralized configuration
 - **Distributed Tracing**: Add observability with Spring Cloud Sleuth and Zipkin
-- **Load Balancing**: Implement client-side load balancing for service instances
 - **Security**: Add OAuth2/JWT for service-to-service authentication
+- **Service Mesh**: Consider implementing Istio or Linkerd for advanced service-to-service communication
 
 ### Evolution Path
 
-1. **Phase 1 (Current)**: Direct HTTP communication with RestTemplate
-2. **Phase 2**: Service discovery and Feign clients
-3. **Phase 3**: API Gateway and resilience patterns
-4. **Phase 4**: Asynchronous messaging and event-driven architecture
-5. **Phase 5**: Advanced patterns (Saga, CQRS, etc.)
+1. **Phase 1 (Completed)**: Direct HTTP communication with RestTemplate
+2. **Phase 2 (Current)**: Service discovery with Eureka and load-balanced RestTemplate ✅
+3. **Phase 3**: Feign clients and API Gateway
+4. **Phase 4**: Resilience patterns and distributed tracing
+5. **Phase 5**: Asynchronous messaging and event-driven architecture
+6. **Phase 6**: Advanced patterns (Saga, CQRS, etc.)
 
-## 10. Project Structure
+## 11. Project Structure
 
 Each service follows a standard Spring Boot project structure:
 
 ```
 UOP/
+├── discovery-server/
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/
+│   │   │   │   └── (Eureka Server Application)
+│   │   │   └── resources/
+│   │   │       └── application.yml
+│   ├── build.gradle
+│   └── settings.gradle
+│
 ├── user-service/
 │   ├── src/
 │   │   ├── main/
@@ -327,7 +446,7 @@ UOP/
 │   │   │   │   │   └── UserService.java
 │   │   │   │   └── UserServiceApplication.java
 │   │   │   └── resources/
-│   │   │       └── application.properties
+│   │   │       └── application.yml
 │   │   └── test/
 │   ├── build.gradle
 │   └── settings.gradle
@@ -340,7 +459,7 @@ UOP/
 │   │   │   │   │   ├── PaymentClient.java
 │   │   │   │   │   └── UserClient.java
 │   │   │   │   ├── config/
-│   │   │   │   │   └── RestTemplateConfig.java
+│   │   │   │   │   └── RestTemplateConfig.java (@LoadBalanced)
 │   │   │   │   ├── controller/
 │   │   │   │   │   └── OrderController.java
 │   │   │   │   ├── dto/
@@ -357,7 +476,7 @@ UOP/
 │   │   │   │   │   └── OrderService.java
 │   │   │   │   └── OrderServiceApplication.java
 │   │   │   └── resources/
-│   │   │       └── application.properties
+│   │   │       └── application.yml
 │   │   └── test/
 │   ├── build.gradle
 │   └── settings.gradle
@@ -381,7 +500,7 @@ UOP/
     │   │   │   │   └── PaymentService.java
     │   │   │   └── PaymentServiceApplication.java
     │   │   └── resources/
-    │   │       └── application.properties
+    │   │       └── application.yml
     │   └── test/
     ├── build.gradle
     └── settings.gradle
@@ -394,7 +513,9 @@ UOP/
 - **Repository Layer**: Data access using Spring Data JPA
 - **DTO Layer**: Data transfer objects for API contracts
 - **Entity Layer**: JPA entities for database mapping
-- **Client Layer** (order-service only): REST clients for inter-service communication
+- **Client Layer** (order-service only): REST clients for inter-service communication using service names
+- **Configuration Layer**: Spring configuration for load-balanced RestTemplate
+- **Discovery Client**: All services register with and discover services through Eureka
 
 ---
 
