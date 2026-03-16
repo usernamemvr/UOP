@@ -1,22 +1,14 @@
 package com.spring.orderservice.client;
 
 import com.spring.orderservice.dto.UserDto;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 
-@Component
-@RequiredArgsConstructor
-public class UserClient {
+@FeignClient(name = "user-service")
+public interface UserClient {
 
-    private final RestTemplate restTemplate;
-
-    private static final String USER_SERVICE_BASE_URL = "http://user-service/users";
-    // can be injected as ENV's from IntelliJ IDE
-
-    public UserDto getUserById(Long id) {
-        String url = USER_SERVICE_BASE_URL + "/" + id;
-        return restTemplate.getForObject(url, UserDto.class);
-    }
+    @GetMapping("/users/{id}")
+    UserDto getUserById(@PathVariable Long id);
 }
 

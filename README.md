@@ -4,13 +4,13 @@ A Spring Boot microservices learning project demonstrating a microservice archit
 
 ## 1. Project Overview
 
-This project demonstrates a microservice architecture built using Spring Boot and Spring Cloud. The system consists of three independent microservices that communicate synchronously using REST APIs with **Spring Cloud Eureka** for service discovery. This architecture serves as a foundation for learning microservices concepts and will continue to evolve with additional Spring Cloud technologies.
+This project demonstrates a microservice architecture built using Spring Boot and Spring Cloud. The system consists of three independent microservices that communicate synchronously using REST APIs with **Spring Cloud Eureka** for service discovery. This architecture serves as a foundation for learning microservices concepts and continues to evolve with additional Spring Cloud technologies such as **Spring Cloud OpenFeign**.
 
 The project showcases:
 - Service decomposition and separation of concerns
 - **Service discovery and registration with Spring Cloud Eureka**
-- **Load-balanced inter-service communication**
-- Inter-service communication via HTTP REST APIs using service names
+- **Load-balanced inter-service communication** via Eureka-aware HTTP clients
+- Inter-service communication via HTTP REST APIs using service names (through **OpenFeign** clients in `order-service`)
 - Orchestration patterns in microservices
 - Service isolation with independent databases
 
@@ -158,21 +158,21 @@ All services are configured with:
 
 ### Load Balancing
 
-The `RestTemplate` in order-service is configured with `@LoadBalanced`, enabling:
+Client-side load balancing is handled by the Spring Cloud stack and Eureka when multiple instances of a service are registered, enabling:
 - Service name resolution through Eureka
 - Client-side load balancing across multiple service instances
 - Dynamic service discovery without hardcoded URLs
 
 ## 5. Communication Model
 
-Services communicate via **synchronous HTTP REST calls** using Spring Boot's `RestTemplate` with **Eureka service discovery**. The order-service uses REST clients (`UserClient` and `PaymentClient`) that resolve service names through Eureka.
+Services communicate via **synchronous HTTP REST calls** using **Spring Cloud OpenFeign** clients with **Eureka service discovery**. The order-service uses Feign-based REST clients (`UserClient` and `PaymentClient`) that resolve service names through Eureka.
 
 ### Request Flow for Creating an Order
 
 1. **Client** sends `POST /orders` request to **order-service**
-2. **order-service** validates user by calling `GET /users/{id}` on **user-service** (resolved via Eureka)
+2. **order-service** validates user by calling `GET /users/{id}` on **user-service** via an **OpenFeign client** (`UserClient`) with service name resolved through Eureka
 3. **order-service** creates a temporary order with `PENDING` status
-4. **order-service** processes payment by calling `POST /payments` on **payment-service** (resolved via Eureka)
+4. **order-service** processes payment by calling `POST /payments` on **payment-service** via an **OpenFeign client** (`PaymentClient`) with service name resolved through Eureka
 5. **order-service** updates the order with payment information and final status
 6. **order-service** returns the complete order response to the client
 
@@ -180,17 +180,23 @@ Services communicate via **synchronous HTTP REST calls** using Spring Boot's `Re
 
 - **Synchronous**: All inter-service communication is synchronous (request-response)
 - **Service Discovery**: Services communicate using service names resolved through Eureka
-- **Load Balanced**: `@LoadBalanced` RestTemplate enables client-side load balancing
+- **Load Balanced**: Eureka and the Spring Cloud stack enable client-side load balancing when scaled
 - **RESTful**: All services expose RESTful APIs following standard HTTP methods
-- **Client Pattern**: Order-service uses dedicated client classes (`UserClient`, `PaymentClient`) to encapsulate service-to-service communication
+- **Client Pattern**: Order-service uses dedicated **OpenFeign client** interfaces (`UserClient`, `PaymentClient`) to encapsulate service-to-service communication
 - **Service Names**: Inter-service calls use service names (e.g., `http://user-service/users`, `http://payment-service/payments`) instead of hardcoded URLs
 
 ## 6. Technology Stack
 
 - **Java 17** - Programming language
-- **Spring Boot 3.3.2 / 4.0.3** - Application framework
+- **Spring Boot (3.2.x / 3.3.x / 3.5.x)** - Application framework (per service)
+  - discovery-server: **Spring Boot 3.5.11**
+  - user-service: **Spring Boot 3.3.2**
+  - order-service: **Spring Boot 3.2.5**
+  - payment-service: **Spring Boot 3.2.5**
 - **Spring Cloud Eureka** - Service discovery and registration
-- **Spring Cloud LoadBalancer** - Client-side load balancing
+- **Spring Cloud Netflix Eureka Client** - Service registration for each microservice
+- **Spring Cloud OpenFeign** - Declarative HTTP clients for inter-service communication (order-service)
+- **Spring Cloud Dependencies 2023.0.3 / 2025.0.1** - Spring Cloud BOMs used across services
 - **Spring Data JPA** - Data persistence layer
 - **H2 Database** - In-memory database for development
 - **Lombok** - Reduces boilerplate code
@@ -395,7 +401,7 @@ This project is designed to evolve with additional Spring Cloud technologies and
 
 ### Planned Enhancements
 
-- **Feign Clients**: Replace RestTemplate with declarative Feign clients for cleaner service communication
+- **Feign Clients**: Replace RestTemplate with declarative Feign clients for cleaner service communication ✅ (implemented in `order-service`)
 - **API Gateway (Spring Cloud Gateway)**: Add a single entry point for all client requests
 - **Resilience Patterns (Resilience4j)**: Implement circuit breakers, retries, and rate limiting
 - **Messaging Systems (Kafka/RabbitMQ)**: Introduce asynchronous communication for better scalability
@@ -408,8 +414,8 @@ This project is designed to evolve with additional Spring Cloud technologies and
 ### Evolution Path
 
 1. **Phase 1 (Completed)**: Direct HTTP communication with RestTemplate
-2. **Phase 2 (Current)**: Service discovery with Eureka and load-balanced RestTemplate ✅
-3. **Phase 3**: Feign clients and API Gateway
+2. **Phase 2 (Completed)**: Service discovery with Eureka and load-balanced HTTP clients
+3. **Phase 3 (Current)**: Feign clients in `order-service` (future: add API Gateway)
 4. **Phase 4**: Resilience patterns and distributed tracing
 5. **Phase 5**: Asynchronous messaging and event-driven architecture
 6. **Phase 6**: Advanced patterns (Saga, CQRS, etc.)
@@ -458,8 +464,6 @@ UOP/
 │   │   │   │   ├── client/
 │   │   │   │   │   ├── PaymentClient.java
 │   │   │   │   │   └── UserClient.java
-│   │   │   │   ├── config/
-│   │   │   │   │   └── RestTemplateConfig.java (@LoadBalanced)
 │   │   │   │   ├── controller/
 │   │   │   │   │   └── OrderController.java
 │   │   │   │   ├── dto/
@@ -513,8 +517,7 @@ UOP/
 - **Repository Layer**: Data access using Spring Data JPA
 - **DTO Layer**: Data transfer objects for API contracts
 - **Entity Layer**: JPA entities for database mapping
-- **Client Layer** (order-service only): REST clients for inter-service communication using service names
-- **Configuration Layer**: Spring configuration for load-balanced RestTemplate
+- **Client Layer** (order-service only): OpenFeign clients for inter-service communication using service names
 - **Discovery Client**: All services register with and discover services through Eureka
 
 ---
