@@ -15,7 +15,7 @@ public class PaymentClient {
 
     private final RestTemplate restTemplate;
 
-    private static final String PAYMENT_SERVICE_BASE_URL = "http://payment-service/payments";
+    private static final String PAYMENT_SERVICE_BASE_URL = "http://payment-service:8080/payments";
     // can be injected as ENV's from IntelliJ IDE
 
     public PaymentResponseDto processPayment(PaymentRequestDto request) {

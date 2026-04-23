@@ -11,7 +11,7 @@ public class UserClient {
 
     private final RestTemplate restTemplate;
 
-    private static final String USER_SERVICE_BASE_URL = "http://user-service/users";
+    private static final String USER_SERVICE_BASE_URL = "http://user-service:8080/users";
     // can be injected as ENV's from IntelliJ IDE
 
     public UserDto getUserById(Long id) {
