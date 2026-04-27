@@ -6,6 +6,8 @@ import com.spring.orderservice.dto.*;
 import com.spring.orderservice.entity.Order;
 import com.spring.orderservice.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -13,11 +15,13 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OrderService {
 
     private final OrderRepository orderRepository;
     private final UserClient userClient;
     private final PaymentClient paymentClient;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     public OrderResponseDto createOrder(OrderRequestDto request) {
         // 1. Validate user exists
@@ -37,31 +41,16 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        // 3. Call payment-service to process payment
-        PaymentRequestDto paymentRequest = new PaymentRequestDto(
-                savedOrder.getId(),
-                savedOrder.getUserId(),
-                savedOrder.getAmount(),
-                savedOrder.getCurrency()
-        );
-        PaymentResponseDto paymentResponse = paymentClient.processPayment(paymentRequest);
-
-        if (paymentResponse == null) {
-            throw new RuntimeException("Payment processing failed for order id: " + savedOrder.getId());
-        }
-
-        // 4. Update and save order with paymentId and status
-        savedOrder.setPaymentId(paymentResponse.getPaymentId());
-        savedOrder.setStatus(paymentResponse.getStatus());
-        Order finalOrder = orderRepository.save(savedOrder);
+        kafkaTemplate.send("order-events", request);
+        log.info("Event produced to order-event topic. {}",request);
 
         // 5. Return OrderResponseDto
         return new OrderResponseDto(
-                finalOrder.getId(),
-                finalOrder.getUserId(),
-                finalOrder.getPaymentId(),
-                finalOrder.getAmount(),
-                finalOrder.getStatus()
+                savedOrder.getId(),
+                savedOrder.getUserId(),
+                null,
+                savedOrder.getAmount(),
+                savedOrder.getStatus()
         );
     }
 
